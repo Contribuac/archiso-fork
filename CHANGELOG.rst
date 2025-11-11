@@ -10,6 +10,7 @@ Added
 
 Changed
 -------
+- The default package source repositories for the build system are now the previous day's archived snapshot of each repository.
 
 Deprecated
 ----------
