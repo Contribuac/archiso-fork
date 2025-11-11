@@ -17,3 +17,6 @@ bootstrap_tarball_compression=(zstd -c -T0 --long -19)
 file_permissions=(
   ["/etc/shadow"]="0:0:400"
 )
+pacstrap_rm=(
+  "/var/cache/ldconfig/aux-cache"
+)

@@ -12,6 +12,7 @@ Added
 Changed
 -------
 - The default package source repositories for the build system are now the previous day's archived snapshot of each repository.
+- The dynamic linker cache now gets removed at the end of the "pacstrap" phase by default as it is not deterministically built.
 
 Deprecated
 ----------
