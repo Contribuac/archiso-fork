@@ -43,6 +43,7 @@ airootfs_image_type=""
 airootfs_image_tool_options=()
 bootstrap_tarball_compression=""
 cert_list=()
+declare -A mv=()
 declare -A file_permissions=()
 declare -a pacstrap_rm=()
 efibootimg=""
@@ -315,6 +316,22 @@ _make_custom_airootfs() {
     if [[ -d "${profile}/airootfs" ]]; then
         _msg_info "Copying custom airootfs files..."
         cp -af --no-preserve=ownership,mode -- "${profile}/airootfs/." "${pacstrap_dir}"
+
+        # Move files and directories specified in "profiledef.sh"
+        for filename in "${!mv[@]}"; do
+            read -r target <<<"${mv["${filename}"]}"
+            # Prevent file path traversal outside of $pacstrap_dir
+            if [[ "$(realpath -q -- "${pacstrap_dir}${filename}")" != "${pacstrap_dir}"* ]]; then
+                _msg_error "Failed to move '${pacstrap_dir}${filename}'. Outside of valid path." 1
+            elif [[ "$(realpath -q -- "${pacstrap_dir}${target}")" != "${pacstrap_dir}"* ]]; then
+                _msg_error "Failed to move '${pacstrap_dir}${filename}' to '${pacstrap_dir}${target}'. Outside of valid path." 1
+            else
+                _msg_info "Moving '${pacstrap_dir}${filename}' to '${pacstrap_dir}${target}'..."
+                mv -- "${pacstrap_dir}${filename}" "${pacstrap_dir}${target}"
+                _msg_info "Done! Moved '${pacstrap_dir}${filename}' to '${pacstrap_dir}${target}'."
+            fi
+        done
+
         # Set ownership and mode for files and directories
         for filename in "${!file_permissions[@]}"; do
             IFS=':' read -ra permissions <<<"${file_permissions["${filename}"]}"

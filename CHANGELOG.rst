@@ -8,6 +8,7 @@ Changelog
 Added
 -----
 - You can now define a optional "pacstrap_rm" array of file and directory paths to remove at the end of the "pacstrap" phase in "profiledef.sh".
+- You can now define a optional "mv" array of file and directory paths to move at the start of the build in "profiledef.sh".
 
 Changed
 -------
