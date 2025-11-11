@@ -375,6 +375,12 @@ _make_packages() {
         unset ARCHISO_GNUPG_FD
     fi
 
+    _msg_info "Setting the install date in all installed packages description files to the value of the '\$SOURCE_DATE_EPOCH' environment variable..."
+    for desc in "${pacstrap_dir}/var/lib/pacman/local"/*/desc; do
+        [[ -f "${desc}" ]] && sed -i '/^%INSTALLDATE%$/ {n; s/.*/'"${SOURCE_DATE_EPOCH}"'/}' "${desc}"
+    done
+    _msg_info "Done! Set the install date in all installed packages description files to the value of the '\$SOURCE_DATE_EPOCH' environment variable."
+
     _msg_info "Done! Packages installed successfully."
 }
 
