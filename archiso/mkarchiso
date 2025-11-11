@@ -44,6 +44,7 @@ airootfs_image_tool_options=()
 bootstrap_tarball_compression=""
 cert_list=()
 declare -A file_permissions=()
+declare -a pacstrap_rm=()
 efibootimg=""
 efiboot_files=()
 # adapted from GRUB_EARLY_INITRD_LINUX_STOCK in https://git.savannah.gnu.org/cgit/grub.git/tree/util/grub-mkconfig.in
@@ -380,6 +381,21 @@ _make_packages() {
         [[ -f "${desc}" ]] && sed -i '/^%INSTALLDATE%$/ {n; s/.*/'"${SOURCE_DATE_EPOCH}"'/}' "${desc}"
     done
     _msg_info "Done! Set the install date in all installed packages description files to the value of the '\$SOURCE_DATE_EPOCH' environment variable."
+
+    # Remove files and directories specified in "profiledef.sh"
+    for filename in "${pacstrap_rm[@]}"; do
+        # Prevent file path traversal outside of $pacstrap_dir
+        if [[ "$(realpath -q -- "${pacstrap_dir}${filename}")" != "${pacstrap_dir}"* ]]; then
+            _msg_error "Failed to remove '${pacstrap_dir}${filename}'. Outside of valid path." 1
+        # Warn if the file does not exist
+        elif [[ ! -e "${pacstrap_dir}${filename}" ]]; then
+            _msg_warning "Cannot remove '${pacstrap_dir}${filename}'. The file or directory does not exist."
+        else
+            _msg_info "Removing '${pacstrap_dir}${filename}'..."
+            rm -rf -- "${pacstrap_dir}${filename}"
+            _msg_info "Done! Removed '${pacstrap_dir}${filename}'."
+        fi
+    done
 
     _msg_info "Done! Packages installed successfully."
 }

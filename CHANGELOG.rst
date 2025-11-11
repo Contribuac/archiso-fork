@@ -7,6 +7,7 @@ Changelog
 
 Added
 -----
+- You can now define a optional "pacstrap_rm" array of file and directory paths to remove at the end of the "pacstrap" phase in "profiledef.sh".
 
 Changed
 -------
