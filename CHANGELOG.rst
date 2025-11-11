@@ -22,6 +22,7 @@ Deprecated
 Fixed
 -----
 - Installed packages description files now respect the "$SOURCE_DATE_EPOCH" environment variable in regards to the install date.
+- The compression utilities used now respect the "$SOURCE_DATE_EPOCH" environment variable in regards to the timestamps associated with the files and directories within the generated output.
 
 Removed
 -------

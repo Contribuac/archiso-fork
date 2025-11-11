@@ -1480,7 +1480,7 @@ _build_bootstrap_image() {
 
     _msg_info "Creating bootstrap image..."
     rm -f -- "${out_dir:?}/${image_name:?}"
-    bsdtar -cf - "root.${arch}" "pkglist.${arch}.txt" 'version' \
+    bsdtar --mtime="@$SOURCE_DATE_EPOCH" --clamp-mtime -cf - "root.${arch}" "pkglist.${arch}.txt" 'version' \
         | "${bootstrap_tarball_compression[@]}" >"${out_dir}/${image_name}"
     _msg_info "Done!"
     du -h -- "${out_dir}/${image_name}"
@@ -1522,6 +1522,10 @@ _build_iso_image() {
     if (( $(du -s --apparent-size -B1M "${isofs_dir}/" | awk '{ print $1 }') > 900 )); then
         xorrisofs_options+=('-no-pad')
     fi
+
+    # Respect the "$SOURCE_DATE_EPOCH" environment variable.
+    # In regards to the timestamps associated with the files and directories within the generated "ISO".
+    xorriso_options+=('-volume_date' 'all_file_dates' "=$SOURCE_DATE_EPOCH")
 
     rm -f -- "${out_dir}/${image_name}"
     _msg_info "Creating ISO image..."
