@@ -15,6 +15,7 @@ Changed
 -------
 - The default package source repositories for the build system are now the previous day's archived snapshot of each repository.
 - The dynamic linker cache now gets removed at the end of the "pacstrap" phase by default as it is not deterministically built.
+- The "pacstrap" "gpg" keyring is now isolated from the host and chroot, due to this the "archlinux-keyring" package is now a required dependency.
 
 Deprecated
 ----------
@@ -23,6 +24,7 @@ Fixed
 -----
 - Installed packages description files now respect the "$SOURCE_DATE_EPOCH" environment variable in regards to the install date.
 - The compression utilities used now respect the "$SOURCE_DATE_EPOCH" environment variable in regards to the timestamps associated with the files and directories within the generated output.
+- Made "gpg" respect the "$SOURCE_DATE_EPOCH" environment variable in regards to the system time.
 
 Removed
 -------

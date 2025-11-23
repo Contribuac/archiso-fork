@@ -267,7 +267,7 @@ _mk_pgp_signature() {
     # Add gpg sender option if the value is provided
     [[ -z "${gpg_sender}" ]] || gpg_options+=('--sender' "${gpg_sender}")
     # always use the .sig file extension, as that is what mkinitcpio-archiso's hooks expect
-    gpg --batch --no-armor --no-include-key-block --output "${airootfs_image_filename}.sig" --detach-sign \
+    gpg --batch --no-armor --no-include-key-block --faked-system-time "${SOURCE_DATE_EPOCH}!" --output "${airootfs_image_filename}.sig" --detach-sign \
         --default-key "${gpg_key}" "${gpg_options[@]}" "${airootfs_image_filename}"
     _msg_info "Done!"
 }
@@ -359,10 +359,17 @@ _make_custom_airootfs() {
 _make_packages() {
     _msg_info "Installing packages to '${pacstrap_dir}/'..."
 
+    sed -i "s|^#* *GPGDir *=.*|GPGDir = ${work_dir}/pacstrap/gnupg|" "${work_dir}/${buildmode}.pacman.conf"
+    export GPGOPTS="--faked-system-time='${SOURCE_DATE_EPOCH}!'"
+    [[ -d "${work_dir}/pacstrap/gnupg" ]] && rm -r -- "${work_dir}/pacstrap/gnupg"
+    pacman-key --gpgdir "${work_dir}/pacstrap/gnupg" --init
+    pacman-key --gpgdir "${work_dir}/pacstrap/gnupg" --populate archlinux
     if [[ -v gpg_publickey ]]; then
-        exec {ARCHISO_GNUPG_FD}<"$gpg_publickey"
-        export ARCHISO_GNUPG_FD
+        pacman-key --gpgdir "${work_dir}/pacstrap/gnupg" --add "$gpg_publickey"
+        pacman-key --gpgdir "${work_dir}/pacstrap/gnupg" --lsign "${gpg_key}"
     fi
+    unset GPGOPTS
+
     if [[ -v cert_list[0] ]]; then
         exec {ARCHISO_TLS_FD}<"${cert_list[0]}"
         export ARCHISO_TLS_FD
@@ -371,7 +378,6 @@ _make_packages() {
         exec {ARCHISO_TLSCA_FD}<"${cert_list[2]}"
         export ARCHISO_TLSCA_FD
     fi
-
 
     # Unset TMPDIR to work around https://bugs.archlinux.org/task/70580
     if [[ "${quiet}" = "y" ]]; then
@@ -387,10 +393,6 @@ _make_packages() {
     if [[ -v cert_list[2] ]]; then
         exec {ARCHISO_TLSCA_FD}<&-
         unset ARCHISO_TLSCA_FD
-    fi
-    if [[ -v gpg_publickey ]]; then
-        exec {ARCHISO_GNUPG_FD}<&-
-        unset ARCHISO_GNUPG_FD
     fi
 
     _msg_info "Setting the install date in all installed packages description files to the value of the '\$SOURCE_DATE_EPOCH' environment variable..."
@@ -1689,7 +1691,7 @@ _set_overrides() {
 _export_gpg_publickey() {
     gpg_publickey="${work_dir}/pubkey.gpg"
     rm -f -- "$gpg_publickey"
-    gpg --batch --no-armor --output "$gpg_publickey" --export "${gpg_key}"
+    gpg --batch --no-armor --faked-system-time "${SOURCE_DATE_EPOCH}!" --output "$gpg_publickey" --export "${gpg_key}"
     [[ -s "$gpg_publickey" ]] || return
 }
 
