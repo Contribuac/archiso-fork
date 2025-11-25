@@ -1764,12 +1764,7 @@ _make_pkglist() {
 
 # Create working directory
 _make_work_dir() {
-    if [[ ! -d "${work_dir}" ]]; then
-        install -d -- "${work_dir}"
-    elif (( rm_work_dir )); then
-        rm_work_dir=0
-        _msg_warning "Working directory removal requested, but '${work_dir}' already exists. It will not be removed!" 0
-    fi
+    install -d -- "${work_dir}"
 }
 
 # build the base for an ISO and/or a netboot target
@@ -1877,11 +1872,35 @@ _build() {
     for buildmode in "${buildmodes[@]}"; do
         _run_once "_build_buildmode_${buildmode}"
     done
+}
+
+# Disconnect all the bind mounts, remove the chroot and remove the work directory if instructed.
+_cleanup() {
+    _msg_info "Cleaning up..."
+
+    [[ -f "${chroot}/root/opt/archiso/mkarchiso" ]] && mountpoint -q "${chroot}/root/opt/archiso/mkarchiso" && umount "${chroot}/root/opt/archiso/mkarchiso"
+
+    [[ -f "${chroot}/root/opt/archiso/pacman.conf" ]] && mountpoint -q "${chroot}/root/opt/archiso/pacman.conf" && umount "${chroot}/root/opt/archiso/pacman.conf"
+
+    [[ -d "${chroot}/root/opt/archiso/profile" ]] && mountpoint -q "${chroot}/root/opt/archiso/profile" && umount "${chroot}/root/opt/archiso/profile"
+
+    [[ -d "${chroot}/root/opt/archiso/work" ]] && mountpoint -q "${chroot}/root/opt/archiso/work" && umount "${chroot}/root/opt/archiso/work"
+
+    [[ -d "${chroot}/root/opt/archiso/out" ]] && mountpoint -q "${chroot}/root/opt/archiso/out" && umount "${chroot}/root/opt/archiso/out"
+
+    [[ -d "${chroot}/root/opt/archiso/gnupg/home" ]] && mountpoint -q "${chroot}/root/opt/archiso/gnupg/home" && umount "${chroot}/root/opt/archiso/gnupg/home"
+    [[ -d "${chroot}/root/opt/archiso/gnupg/sockets" ]] && mountpoint -q "${chroot}/root/opt/archiso/gnupg/sockets" && umount "${chroot}/root/opt/archiso/gnupg/sockets"
+
+    [[ -d "${chroot}/root/opt/archiso/certs" ]] && mount | awk -v p="${chroot}/root/opt/archiso/certs" '$3 ~ p {print $3}' | xargs -r umount
+
+    [[ -d "${chroot}" ]] && rm -rf -- "${chroot}"
+
     if (( rm_work_dir )); then
-        _msg_info 'Removing the working directory...'
-        rm -rf -- "${work_dir:?}/"
-        _msg_info 'Done!'
+        target="$(realpath -- "$work_dir")/$(basename -- "$chroot")"
+        [[ -d "${target}" ]] && [[ "$target" != "/" ]] && rm -rf -- "${target}"
     fi
+
+    _msg_info "Done! Cleaned up."
 }
 
 while getopts 'c:p:C:L:P:A:D:w:m:o:g:G:vrh?' arg; do
@@ -1922,15 +1941,119 @@ fi
 # get the absolute path representation of the first non-option argument
 profile="$(realpath -- "${1}")"
 
-# Read SOURCE_DATE_EPOCH from file early
-build_date_file="$(realpath -q -- "${override_work_dir:-./work}/build_date")" || :
-if [[ -f "$build_date_file" ]]; then
-    SOURCE_DATE_EPOCH="$(<"$build_date_file")"
-fi
-unset build_date_file
-
 _read_profile
 _set_overrides
+
+# Check if the "mkarchiso" tool itself is
+# already running in its own chroot and if not make it so
+if [[ ! -f "/opt/archiso/chroot" ]]; then
+    # On error call the "_cleanup()" function
+    set -e
+    trap _cleanup EXIT
+    trap _cleanup INT
+
+    _msg_info "Creating the chroot build environment..."
+
+    # Mangle the arguments that will need to be forwarded to the chroot
+    forwarded_args=()
+    [[ -n "${override_iso_application:-}" ]] && forwarded_args+=(-A "'${override_iso_application}'")
+    [[ -n "${override_install_dir:-}" ]] && forwarded_args+=(-D "'${override_install_dir}'")
+    [[ -n "${override_iso_label:-}" ]] && forwarded_args+=(-L "'${override_iso_label}'")
+    [[ -n "${override_iso_publisher:-}" ]] && forwarded_args+=(-P "'${override_iso_publisher}'")
+    [[ -n "${override_gpg_key:-}" ]] && forwarded_args+=(-g "'${override_gpg_key}'")
+    [[ -n "${override_gpg_sender:-}" ]] && forwarded_args+=(-G "'${override_gpg_sender}'")
+    [[ -n "${override_pkg_list:-}" ]] && [[ ${#override_pkg_list[@]} -gt 0 ]] && forwarded_args+=(-p "'${override_pkg_list[*]}'")
+    [[ -n "${override_buildmodes:-}" ]] && [[ ${#override_buildmodes[@]} -gt 0 ]] && forwarded_args+=(-m "'${override_buildmodes[*]}'")
+    [[ -n "${override_quiet:-}" ]] && [[ "${override_quiet}" == "n" ]] && forwarded_args+=(-v)
+
+    # Initialize a new chroot
+    mkdir -p "/var/lib/archiso"
+    chroot=$(mktemp -d "/var/lib/archiso/mkarchiso.XXXXXX")
+    mkarchroot "${chroot}/root" edk2-ovmf gnupg grub openssl archlinux-keyring archiso
+
+    # Create a marker file so we can test if the "mkarchiso" tool itself is already running
+    # in its own chroot later
+    mkdir -p "${chroot}/root/opt/archiso"
+    touch "${chroot}/root/opt/archiso/chroot"
+
+    # Bind mount the executing version of this script to the chroot as read only so it can be accessed later
+    touch "${chroot}/root/opt/archiso/mkarchiso"
+    mount --bind "$0" "${chroot}/root/opt/archiso/mkarchiso"
+    mount -o remount,ro,bind "$0" "${chroot}/root/opt/archiso/mkarchiso"
+
+    # Bind mount the "pacman" configuration specifiable with the "-C" argument to the chroot as read only so it can be accessed later
+    touch "${chroot}/root/opt/archiso/pacman.conf"
+    mount --bind "${pacman_conf}" "${chroot}/root/opt/archiso/pacman.conf"
+    mount -o remount,ro,bind "${pacman_conf}" "${chroot}/root/opt/archiso/pacman.conf"
+
+    # Bind mount the specified profile directory to the chroot as read only so it can be accessed later
+    mkdir -p "${chroot}/root/opt/archiso/profile"
+    mount --bind "${profile}" "${chroot}/root/opt/archiso/profile"
+    mount -o remount,ro,bind "${profile}" "${chroot}/root/opt/archiso/profile"
+
+    # If a "GNUPGHOME" environment variable value is available bind mount the "GNUPGHOME" directory
+    # as read only to the chroot under a file system overlay that makes "$GNUPGHOME/S.gpg-agent" modifiable
+    # in the context of the chroot only so it can be redirected to the hosts "gpg-agent" socket which is also
+    # bind mounted to the chroot allowing for seamless "gpg" integration without affecting the hosts configuration.
+    if [[ -v GNUPGHOME ]]; then
+        mkdir -p \
+            "${chroot}/root/opt/archiso/gnupg/home" \
+            "${chroot}/root/opt/archiso/gnupg/overlay/upper" \
+            "${chroot}/root/opt/archiso/gnupg/overlay/work" \
+            "${chroot}/root/opt/archiso/gnupg/sockets"
+        mount -t overlay overlay -o "lowerdir=${GNUPGHOME},upperdir=${chroot}/root/opt/archiso/gnupg/overlay/upper,workdir=${chroot}/root/opt/archiso/gnupg/overlay/work" "${chroot}/root/opt/archiso/gnupg/home"
+        if [[ -v SUDO_UID && -S "/run/user/$SUDO_UID/gnupg/S.gpg-agent" ]]; then
+            mount --bind "/run/user/$SUDO_UID/gnupg" "${chroot}/root/opt/archiso/gnupg/sockets"
+            rm -f "${chroot}/root/opt/archiso/gnupg/home/S.gpg-agent"
+            printf '%%Assuan%%\nsocket=/opt/archiso/gnupg/sockets/S.gpg-agent\n' > "${chroot}/root/opt/archiso/gnupg/home/S.gpg-agent"
+        fi
+    fi
+
+    # Bind mount any certificates specified with the "-c" argument to the chroot as read only so they can be accessed later
+    if [[ -v cert_list ]]; then
+        cert_paths=()
+        mkdir -p "${chroot}/root/opt/archiso/certs"
+        for cert in "${cert_list[@]}"; do
+            filename=$(basename "${cert}")
+            touch "${chroot}/root/opt/archiso/certs/${filename}"
+            mount --bind "${cert}" "${chroot}/root/opt/archiso/certs/${filename}"
+            mount -o remount,ro,bind "${cert}" "${chroot}/root/opt/archiso/certs/${filename}"
+            cert_paths+=("/opt/archiso/certs/${filename}")
+        done
+        forwarded_args+=(-c "'${cert_paths[*]}'")
+    fi
+
+    # Bind mount the work directory specifiable with the "-w" argument to the chroot
+    # so it can be accessed via a static path within the chroot while also outputting to the correct location on the host
+    mkdir -p "${chroot}/root/opt/archiso/work"
+    mkdir -p "$(realpath -- "${work_dir}")/$(basename "${chroot}")"
+    mount --bind "$(realpath -- "${work_dir}")/$(basename "${chroot}")" "${chroot}/root/opt/archiso/work"
+
+    # Bind mount the out directory specifiable with the "-o" argument to the chroot
+    # so it can be accessed via a static path within the chroot while also outputting to the correct location on the host
+    mkdir -p "${chroot}/root/opt/archiso/out"
+    mkdir -p "$(realpath -- "${out_dir}")/$(basename "${chroot}")"
+    mount --bind "$(realpath -- "${out_dir}")/$(basename "${chroot}")" "${chroot}/root/opt/archiso/out"
+
+    _msg_info "Done! Created the chroot build environment."
+
+    _msg_info "Starting build..."
+
+    arch-nspawn "${chroot}/root" /bin/bash -c "
+        export SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH
+        export GNUPGHOME=/opt/archiso/gnupg/home
+        /opt/archiso/mkarchiso \
+            ${forwarded_args[*]} \
+            -C /opt/archiso/pacman.conf \
+            -w /opt/archiso/work \
+            -o /opt/archiso/out \
+            /opt/archiso/profile"
+
+    _msg_info "Done! Build completed successfully."
+
+    exit 0
+fi
+
 _validate_options
 _build
 

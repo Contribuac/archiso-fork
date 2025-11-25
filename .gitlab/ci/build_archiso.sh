@@ -116,20 +116,20 @@ create_metrics() {
             iso)
                 printf 'image_size_mebibytes{image="%s"} %s\n' \
                     "${profile}" \
-                    "$(du -m -- "${output}/"*.iso | cut -f1)"
+                    "$(du -m -- "${output}/mkarchiso."*/*.iso | cut -f1)"
                 printf 'package_count{image="%s"} %s\n' \
                     "${profile}" \
-                    "$(sort -u -- "${tmpdir}/iso/"*/pkglist.*.txt | wc -l)"
-                if [[ -e "${tmpdir}/efiboot.img" ]]; then
+                    "$(sort -u -- "${tmpdir}/mkarchiso."*"/iso/"*/pkglist.*.txt | wc -l)"
+                if [[ -e "${tmpdir}/mkarchiso."*"/efiboot.img" ]]; then
                     printf 'eltorito_efi_image_size_mebibytes{image="%s"} %s\n' \
                     "${profile}" \
-                    "$(du -m -- "${tmpdir}/efiboot.img" | cut -f1)"
+                    "$(du -m -- "${tmpdir}/mkarchiso."*"/efiboot.img" | cut -f1)"
                 fi
                 # shellcheck disable=SC2046
                 # shellcheck disable=SC2183
                 printf 'initramfs_size_mebibytes{image="%s",initramfs="%s"} %s\n' \
                     $(
-                        du -m -- "${tmpdir}/iso/"*/boot/**/initramfs*.img \
+                        du -m -- "${tmpdir}/mkarchiso."*"/iso/"*/boot/**/initramfs*.img \
                             | awk -v profile="${profile}" \
                                 'function basename(file) {
                                     sub(".*/", "", file)
@@ -141,18 +141,18 @@ create_metrics() {
             netboot)
                 printf 'netboot_size_mebibytes{image="%s"} %s\n' \
                     "${profile}" \
-                    "$(du -m -- "${output}/${install_dir}/" | tail -n1 | cut -f1)"
+                    "$(du -m -- "${output}/mkarchiso."*"/${install_dir}/" | tail -n1 | cut -f1)"
                 printf 'netboot_package_count{image="%s"} %s\n' \
                     "${profile}" \
-                    "$(sort -u -- "${tmpdir}/iso/"*/pkglist.*.txt | wc -l)"
+                    "$(sort -u -- "${tmpdir}/mkarchiso."*"/iso/"*/pkglist.*.txt | wc -l)"
                 ;;
             bootstrap)
                 printf 'bootstrap_size_mebibytes{image="%s"} %s\n' \
                     "${profile}" \
-                    "$(du -m -- "${output}/"*.tar*(.gz|.xz|.zst) | cut -f1)"
+                    "$(du -m -- "${output}/mkarchiso."*"/"*.tar*(.gz|.xz|.zst) | cut -f1)"
                 printf 'bootstrap_package_count{image="%s"} %s\n' \
                     "${profile}" \
-                    "$(sort -u -- "${tmpdir}/"*/bootstrap/pkglist.*.txt | wc -l)"
+                    "$(sort -u -- "${tmpdir}/mkarchiso."*"/"*/bootstrap/pkglist.*.txt | wc -l)"
                 ;;
         esac
     } >"${_metrics}"
@@ -307,12 +307,12 @@ run_mkarchiso() {
     print_section_end "mkarchiso"
 
     if [[ "${buildmode}" =~ "iso" ]]; then
-        create_zsync_delta "${output}/"*.iso
-        create_checksums "${output}/"*.iso
+        create_zsync_delta "${output}/mkarchiso."*/*.iso
+        create_checksums "${output}/mkarchiso."*/*.iso
     fi
     if [[ "${buildmode}" == "bootstrap" ]]; then
-        create_zsync_delta "${output}/"*.tar*(.gz|.xz|.zst)
-        create_checksums "${output}/"*.tar*(.gz|.xz|.zst)
+        create_zsync_delta "${output}/mkarchiso."*/*.tar*(.gz|.xz|.zst)
+        create_checksums "${output}/mkarchiso."*/*.tar*(.gz|.xz|.zst)
     fi
     create_metrics
 

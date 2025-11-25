@@ -16,6 +16,7 @@ Changed
 - The default package source repositories for the build system are now the previous day's archived snapshot of each repository.
 - The dynamic linker cache now gets removed at the end of the "pacstrap" phase by default as it is not deterministically built.
 - The "pacstrap" "gpg" keyring is now isolated from the host and chroot, due to this the "archlinux-keyring" package is now a required dependency.
+- The "mkarchiso" tool itself now runs in its own chroot to ensure the special directory paths and device identifiers embedded into the output are always the same because of this builds can no longer be resumed from a existing work directory.
 
 Deprecated
 ----------
