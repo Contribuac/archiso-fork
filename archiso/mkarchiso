@@ -304,6 +304,12 @@ _make_pacman_conf() {
     pacman-conf --config "${pacman_conf}" \
         | sed "/CacheDir/d;/DBPath/d;/HookDir/d;/LogFile/d;/RootDir/d;/\[options\]/a CacheDir = ${_cache_dirs}
         /\[options\]/a HookDir = ${pacstrap_dir}/etc/pacman.d/hooks/" >"${work_dir}/${buildmode}.pacman.conf"
+
+    # Replace any instance of '$last' in the "pacman" configuration with the human readable date of the day prior to the value of
+    # the "$SOURCE_DATE_EPOCH" environment variable in the format "YYYY/MM/DD" so the server locations can be automatically set to
+    # the archived version of the respective repository on said day to prevent the wrong versions of packages being fetched when
+    # verifying the reproducibility of a build.
+    sed -i "s|\$last|$(date -u -d "@$((SOURCE_DATE_EPOCH - 86400))" +%Y/%m/%d)|" "${work_dir}/${buildmode}.pacman.conf"
 }
 
 # Prepare working directory and copy custom root file system files.

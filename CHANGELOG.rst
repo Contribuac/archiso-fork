@@ -10,6 +10,7 @@ Added
 - You can now define a optional "pacstrap_rm" array of file and directory paths to remove at the end of the "pacstrap" phase in "profiledef.sh".
 - You can now define a optional "mv" array of file and directory paths to move at the start of the build in "profiledef.sh".
 - Set defaults for the non-deterministic identifiers generated at build time, namely "/etc/brlapi.key", "/etc/iscsi/initiatorname.iscsi" and "/etc/nvme/hostid".
+- You can now use '$last' in the "pacman" configurations to inject the human readable date of the day prior to the value of the "$SOURCE_DATE_EPOCH" environment variable in the format "YYYY/MM/DD" so the server locations can be automatically set to the archived version of the respective repository on said day to prevent the wrong versions of packages being fetched when verifying the reproducibility of a build.
 
 Changed
 -------
